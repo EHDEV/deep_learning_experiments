@@ -1,0 +1,313 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Topic Modeling Amarigna\n",
+    "\n",
+    "_ Simple topic classifying LSTM model to test if it is possible to identify topics in Amharic text _"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "Using Theano backend.\n"
+     ]
+    }
+   ],
+   "source": [
+    "from sklearn.datasets import fetch_20newsgroups\n",
+    "from keras.preprocessing.text import Tokenizer\n",
+    "from keras.preprocessing.sequence import pad_sequences\n",
+    "import keras\n",
+    "from keras.layers import Embedding, Dense, LSTM, GRU\n",
+    "from keras.models import Sequential\n",
+    "\n",
+    "from sklearn.model_selection import train_test_split, StratifiedShuffleSplit"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "_A small sample dataset to train and test the model_"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {
+    "collapsed": true
+   },
+   "outputs": [],
+   "source": [
+    "wikis = [\n",
+    "    \"\"\"በፈረንሳይ አገር ሃይማኖትን በግብረ ሰዶማዊ ስዕል መስደብ የተፈቀደ ነው። ግብረ ሰዶምን መስደብ ግን ክልክል ነው። ለአባቱ ፍሬድ ትራምፕ ከአምስት ልጆች መሃል አራተኛው ልጃቸው ነበር።\"\"\",\n",
+    "    \"\"\"ኢትዮጵያ ተፈጥሮ ያደላት ሀገር ናት። ከአፍሪካ ትላልቅ ተራራዎች እንዲሁም ከዓለም ከባህር ጠለል በታች በጣም ጥልቅ ከሆኑ ቦታዎች አንዳንዶቹ ይገኙባታል።\"\"\", \n",
+    "    \"\"\"ሶፍ ዑመር ከአፍሪካ ዋሻዎች ትልቁ ሲሆን ፣ዳሎል ከዓለም በጣም ሙቅ ቦታዎች አንዱ ነው። ወደ ሰማንኒያ የሚቆጠሩ ብሔሮችና ብሔረሰቦች ዛሬ በኢትዮጵያ ይገኛሉ። ከእነዚህም ኦሮሞና አማራ በብዛት ትልቆቹ ናቸው።\"\"\", \n",
+    "    \"\"\"ኢትዮጵያ በኣክሱም ሓውልት፣ ከአንድ ድንጋይ ተፈልፍለው በተሰሩ ቤተ-ክርስትያኖቹዋ እና በኦሎምፒክ የወርቅ ሜዳልያ አሸናፊ አትሌቶቹዋ ትታወቃለች። \"\"\",\n",
+    "   \"\"\" የቡና ፍሬ ለመጀመሪያ ጊዜ የተገኘው በኢትዮጵያ ሲሆን ሀገሪቱዋ በቡናና ማር አምራችነት በአፍሪካ ቅድሚያ ይዛለች።\"\"\",\n",
+    "    \"\"\"ኦሮሞ በኢትዮጵያ፣ በኬንያና፣ በሶማሊያ የሚኖር ማህበረሰብ ነዉ። ኦሮሞ ማለት በገዳ ስርኣተ መንገስት ስር ይተዳደር የነበረ በራሱ የሚኮራ ህዘብ ነው፡በ ገዳ መንግስት ስር የ አገር መሪ በየ ፰(ስምንት) አመት\"\"\", \n",
+    "    \"\"\"የሚቀይር ሲሆን በተለያዩ የ ኦሮሚያ ክልሎች ንጉሳት እንደነበሩም ታሪክ ይነግረናል። በኦሮሚያ ክልሎች ከነበሩት ንጉሳት መካከል የታወቁት አባ ጂፋር ናቸው።\"\"\",\n",
+    "    \"\"\"ኦሮሚያ በ አንድሺ ስምንት መቶ ክፍለዘመን ማለቂያ ላይ በ ንጉስ ሚኒሊክ አማካኝነት ከ አቢሲኒያ ጋር ተቀላቀላ ኢትዮጵያ ስትመሰረት፣የ ቀዳሚ ሃገሩ ህዘብ ብዙ ችግር እና ጭቆና አሳልፏል። የ ኦሮሞን ብዛት አሰመልክቶ\"\"\", \n",
+    "    \"\"\"፤ሃይል እንዳይኖረው በሚለው ስጋት የቀድሞ መንግስታት የህዝቡን መብት ሳያከበሩ ወይ ባህሉን ሳይይደገፉ ገዝተዋል. ለዛም ነው ብዙ ኦሮምያዊ ህዘብ ከሌሎች የሚወዳችው ህዝቦችህ ተለይቶ መገንጠልን የመረጠው።\"\"\",\n",
+    "    \"\"\"ብዙ የጀርመን ሰዎች በዓለም ዙሪያ ስመ ጥሩ ናቸው። ይህም ደራሲዎች ያኮብ ግሪምና ወንድሙ ቭልሄልም ግሪም፣ ባለቅኔው ዮሐን ቩልፍጋንግ ቮን ጌጠ፣ የፕሮቴስታንት ንቅናቄ መሪ ማርቲን ሉጠር፣ ፈላስፋዎች ካንት፣ \"\"\"\n",
+    "    \"\"\"ኒሺና ሄገል፣ ሳይንቲስቱ አልቤርት አይንስታይን፣ ፈጠራ አፍላቂዎች ዳይምለር፣ ዲዝልና ካርል ቤንዝ፣ የሙዚቃ ቃኚዎች ዮሐን ሴባስትያን ባክ፣ ሉድቪግ ቫን ቤትሆቨን፣ ብራምዝ፣ ስትራውስ፣ ቫግነርና ብዙ ሌሎች ይከትታል።\"\"\",\n",
+    "    \"\"\"እጅግ ቁም ነገር የሆነ ጠቃሚ ፈጠራ ማሳተሚያ፤ ዮሐንስ ጉተንቤርግ በሚባል ሰው በ1431 ዓ.ም. ተጀመረ። ስለዚህ ተጓዦች ከውጭ አገር ሲመልሱ በአውሮፓ ያለው ሰው ሁሉ እርግጡን በቶሎ ያውቀው ነበር። አሁን\"\"\",\n",
+    "    \"\"\"ጀርመን «ዶይቸ ቨለ» በሚባል ራዲዮን ጣቢያ ላይ ዜና በእንግሊዝኛ ያሠራጫል። የጀርመን ሕዝብ ባማካኝ ከአውሮፓ ሁሉ ቴሌቪዥንን የሚወድዱ ሲሆኑ ፺ ከመቶ ሰዎች ወይም ሳተላይት ወይም ገመድ ቴሌቪዥን አላቸው\"\"\",\n",
+    "    \"\"\"ጀርመን አንድ ይፋዊ ቋንቋ ብቻ አለው እርሱም ጀርመንኛ ሲሆን ከዚህ ውስጥ ብዙ ልዩ ልዩ የጀርመንኛ ቀበሌኞች በአገሩ ይገኛሉ። ለአንዳንድ ሰዎች ጀርመን «የገጣሚዎችና የአሳቢዎች አገር» በመባል ታውቋል። በዓመታት ላይ በሥነ ጽሑፍ፣ በሥነ ጥበብ፣ በፍልስፍና፣ በሙዚቃ፣ በሲኒማ፣ \"\"\",\n",
+    "    \"\"\"ናልድ ትራምፕ ከኒው ዮርክ ከአምስቱ ቀጠናዎች አንዱ በሆነው በክዊንስ በእ.ኤ.አ. ጁን 14 1946 ተወለደ። ለእናቱ ሜሪ አን እና ለአባቱ ፍሬድ ትራምፕ ከአምስት ልጆች መሃል አራተኛው ልጃቸው ነበር። \"\"\",\n",
+    "   \"\"\" እናቱ የተወለደችው በስኮትላንድ ሉዊስ ኤንድ ሃሪስ ደሴት ላይ ቶንግ በተባለው ስፍራ ነው። በእ.ኤ.አ. 1930 በ18 ዓመቷ ዩናይትድ ስቴትስን ጎበኘች እናም ከፍሬድ ትራምፕ ጋር ተገናኘች። በእ.ኤ.አ. 1936 ትዳር ይዘው \"\"\",\n",
+    "  \"\"\"  በጃማይካ ኢስቴትስ ክዊንስ መኖር ጀመሩ። በዚህም ስፍራ ፍሬድ ትራምፕ ታላቅ የሪልኢስቴት ገንቢ ሆኖ ነበር። ዶናልድ ትራምፕ፥ ሮበርት የተባለ አንድ ወንድም፣ ሜሪአን እና ኤሊዛቤት የተባሉ ሁለት እህቶች አሉት።\"\"\", \n",
+    "    \"\"\"ፍሬድ ጁኒየር የተባለ ወንድሙ ደግሞ ከአልኮል ሱስ ጋር በተያያዘ ምክንያት ሕይወቱ አልፏል ፤ ይህም ከአልኮሆል መጠጥ እና ከትምባሆ እንዲታቀብ እንዳደረገውም ዶናልድ ትራምፕ ይናገራል\"\"\"\n",
+    "]\n",
+    "\n",
+    "nb_words = 10000\n",
+    "max_seq_len = 1000\n",
+    "\n",
+    "wlabs = [0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 0, 0, 0, 0]\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {
+    "collapsed": true
+   },
+   "outputs": [],
+   "source": [
+    "validx = [\n",
+    "    \"\"\"በእ.ኤ.አ. ጁን 16 2015 ላይ ደግሞ ለፕሬዚደንትነት እንደሚወዳደር አሳወቀ። ይህን ጊዜ ግን የሪፐብሊካን ፓርቲን በመወከል ነው። በስደት፣ በነፃ ገበያ እና በጦር ጣልቃ ገብነት ላይ ባለው ተቃውሞ ምክንያት ታዋቂ ሆኗል። በእነኚህ አነጋጋሪ አስተያየቶቹ\"\"\",\n",
+    "\n",
+    "    \"\"\"(እ.ኤ.አ. ጁን 14 ቀን 1946 ተወለደ) አሜሪካዊ ነጋዴ ፣ ፖለቲከኛ ፣ በቴሌቪዥን ፕሮግራሞቹ ታዋቂ እና 45ኛው የዩናይትድ ስቴትስ ኦፍ አሜሪካ ፕሬዚደንት ነው። ሥልጣኑንም እ.ኤ.አ. በጃኑዌሪ 20 ቀን 2017 ተረክቧል።\"\"\",\n",
+    "\n",
+    "    \"\"\"የኬልቶች ከተማ መጀመርያ «ሉኮቶኪያ» ተብሎ በስትራቦን ተመዘገበ። ፕቶሎመይ ደግሞ ከተማውን «ለውኮተኪያ» አለው። ዩሊዩስ ቄሳር አገሩን ሲይዘው ሥፍራውን በሮማይስጥ «ሉቴቲያ» አለው። የኖረበት ጎሣ ፓሪሲ ስለ ተባሉ፣ የከተማው ስም በሙሉ «ሉቴቲያ ፓሪሶሩም» («የፓሪሲ ሉቴቲያ») ተባለ።\"\"\",\n",
+    "\n",
+    "    \"\"\"ባቫሪያ ፣ በሙሉ ስሙ ነጻ የባቫሪያ አስተዳደር (ጀርመንኛ፦ Freistaat Bayern /ፍሪሽታት ባየርን/) ደቡብ ምስራቅ ጀርመን ውስጥ የሚገኝ ክፍለ ሃገር ነው። 70,548 ስኩየር ኪ/ሜትር ስፋት ሲኖረው፣ ከማናቸውም የጀርመን ክፍላተ ሃገሮች የበለጠ የቆዳ ስፋት አለው። ይህ ግዛት የጀርመንን አጠቃላይ ስፋት አንድ አምስተኛ (20%) ይሸፍናል።\"\"\",\n",
+    "\n",
+    "    \"\"\" ከኖርስ ራይን ዌስትፋሊያ ክፍለሃገር ቀጥሎ ባቫሪያ ብዙውን የጀርመን ህዝብ ይይዛል። (12.5 ሚሊየን)። ሙኒክ የባቫሪያ ዋና ከተማ ነው።\"\"\",\n",
+    "\n",
+    "    \"\"\"የታሪክ ፀሀፊ የሆነው እንደ ዶናልድ ሰቨን ጎበና በደቡብ በኩል የተደረገው የማስፋፋት ስራ ማለትም ኦሮምኛ ተናጋሪውን ህዝብ ወደ ሚኒሊክ ሀሳብ የተዋሀደው በራስ ጎበና ነበር ይህ እንዲ እንዳለ በኢትዮጵያ ታዋቂ የሆኑት የኦሮሞ አስተዳደር ሹማምንት ወታደሮችም እረድተውት ነበር። በተጨማሪም የኦሮሞ ህዝብ ደቡብ ሲዳማን እና የጉራጌን ህዝብ ወታደር ድል ነስተዋል። \"\"\"\n",
+    "\n",
+    "]\n",
+    "\n",
+    "validy = [ 0, 0, 0, 3, 3, 1]\n",
+    "\n",
+    "\n",
+    "X = wikis + validx\n",
+    "y = wlabs + validy\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "Preparing the data for the model\n",
+    "* Tokenizing the text - Identifying unique words, creating a dictionary and counting their frequency in the list of documents (texts) in the training data.\n",
+    "* One-hot encoding the labels (topics)\n",
+    "* Splitting the data into train and test(validation) sets"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "C:\\apps\\python2.7\\python-2.7.10.amd64\\lib\\site-packages\\keras-2.0.2-py2.7.egg\\keras\\preprocessing\\text.py:94: UserWarning: The `nb_words` argument in `Tokenizer` has been renamed `num_words`.\n",
+      "  warnings.warn('The `nb_words` argument in `Tokenizer` '\n"
+     ]
+    }
+   ],
+   "source": [
+    "\n",
+    "tokenizer = Tokenizer(nb_words=nb_words)\n",
+    "tokenizer.fit_on_texts(X)\n",
+    "sequences = Tokenizer.texts_to_sequences(tokenizer, X)\n",
+    "word_index = tokenizer.word_index\n",
+    "\n",
+    "ydata = keras.utils.to_categorical(y)\n",
+    "input_data = pad_sequences(sequences, maxlen=max_seq_len)\n",
+    "\n",
+    "Xtrain, Xvalid, ytrain, yvalid = train_test_split(input_data, ydata, test_size=0.4)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "_Model definition and training_"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "C:\\apps\\python2.7\\python-2.7.10.amd64\\lib\\site-packages\\ipykernel\\__main__.py:4: UserWarning: Update your `Embedding` call to the Keras 2 API: `Embedding(521, 64, embeddings_initializer=\"glorot_normal\", embeddings_regularizer=<keras.reg..., input_length=1000)`\n",
+      "C:\\apps\\python2.7\\python-2.7.10.amd64\\lib\\site-packages\\ipykernel\\__main__.py:5: UserWarning: Update your `LSTM` call to the Keras 2 API: `LSTM(80, dropout=0.25)`\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "_________________________________________________________________\n",
+      "Layer (type)                 Output Shape              Param #   \n",
+      "=================================================================\n",
+      "embedding_4 (Embedding)      (None, 1000, 64)          33344     \n",
+      "_________________________________________________________________\n",
+      "lstm_4 (LSTM)                (None, 80)                46400     \n",
+      "_________________________________________________________________\n",
+      "dense_4 (Dense)              (None, 4)                 324       \n",
+      "=================================================================\n",
+      "Total params: 80,068.0\n",
+      "Trainable params: 80,068\n",
+      "Non-trainable params: 0.0\n",
+      "_________________________________________________________________\n",
+      "None\n"
+     ]
+    }
+   ],
+   "source": [
+    "embedding_vector_length = 64\n",
+    "model = Sequential()\n",
+    "model.add(Embedding(len(word_index)+1, embedding_vector_length, input_length=max_seq_len, init='glorot_normal', \n",
+    "                    W_regularizer=keras.regularizers.l2(0.01)))\n",
+    "model.add(LSTM(80, dropout_W=0.25))\n",
+    "model.add(Dense(4, activation='softmax'))\n",
+    "model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])\n",
+    "print(model.summary())"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {
+    "collapsed": false
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Train on 13 samples, validate on 10 samples\n",
+      "Epoch 1/25\n",
+      "13/13 [==============================] - 5s - loss: 1.6225 - acc: 0.7500 - val_loss: 1.5937 - val_acc: 0.7500\n",
+      "Epoch 2/25\n",
+      "13/13 [==============================] - 5s - loss: 1.5893 - acc: 0.7500 - val_loss: 1.5645 - val_acc: 0.7500\n",
+      "Epoch 3/25\n",
+      "13/13 [==============================] - 6s - loss: 1.5576 - acc: 0.7500 - val_loss: 1.5360 - val_acc: 0.7500\n",
+      "Epoch 4/25\n",
+      "13/13 [==============================] - 6s - loss: 1.5256 - acc: 0.7500 - val_loss: 1.5082 - val_acc: 0.7500\n",
+      "Epoch 5/25\n",
+      "13/13 [==============================] - 6s - loss: 1.4970 - acc: 0.7500 - val_loss: 1.4811 - val_acc: 0.7500\n",
+      "Epoch 6/25\n",
+      "13/13 [==============================] - 6s - loss: 1.4661 - acc: 0.7500 - val_loss: 1.4547 - val_acc: 0.7500\n",
+      "Epoch 7/25\n",
+      "13/13 [==============================] - 6s - loss: 1.4361 - acc: 0.7500 - val_loss: 1.4290 - val_acc: 0.7500\n",
+      "Epoch 8/25\n",
+      "13/13 [==============================] - 6s - loss: 1.4067 - acc: 0.7500 - val_loss: 1.4041 - val_acc: 0.7500\n",
+      "Epoch 9/25\n",
+      "13/13 [==============================] - 6s - loss: 1.3775 - acc: 0.7500 - val_loss: 1.3800 - val_acc: 0.7500\n",
+      "Epoch 10/25\n",
+      "13/13 [==============================] - 6s - loss: 1.3487 - acc: 0.7500 - val_loss: 1.3568 - val_acc: 0.7500\n",
+      "Epoch 11/25\n",
+      "13/13 [==============================] - 6s - loss: 1.3211 - acc: 0.7500 - val_loss: 1.3344 - val_acc: 0.7500\n",
+      "Epoch 12/25\n",
+      "13/13 [==============================] - 6s - loss: 1.2937 - acc: 0.7500 - val_loss: 1.3132 - val_acc: 0.7500\n",
+      "Epoch 13/25\n",
+      "13/13 [==============================] - 7s - loss: 1.2630 - acc: 0.7500 - val_loss: 1.2932 - val_acc: 0.7500\n",
+      "Epoch 14/25\n",
+      "13/13 [==============================] - 7s - loss: 1.2384 - acc: 0.7500 - val_loss: 1.2751 - val_acc: 0.7500\n",
+      "Epoch 15/25\n",
+      "13/13 [==============================] - 8s - loss: 1.2065 - acc: 0.7500 - val_loss: 1.2599 - val_acc: 0.7500\n",
+      "Epoch 16/25\n",
+      "13/13 [==============================] - 6s - loss: 1.1745 - acc: 0.7500 - val_loss: 1.2509 - val_acc: 0.7500\n",
+      "Epoch 17/25\n",
+      "13/13 [==============================] - 1s - loss: 1.1383 - acc: 0.7500 - val_loss: 1.2601 - val_acc: 0.7500\n",
+      "Epoch 18/25\n",
+      "13/13 [==============================] - 1s - loss: 1.1114 - acc: 0.8077 - val_loss: 1.3868 - val_acc: 0.6000\n",
+      "Epoch 19/25\n",
+      "13/13 [==============================] - 1s - loss: 1.1150 - acc: 0.7500 - val_loss: 1.2551 - val_acc: 0.7000\n",
+      "Epoch 20/25\n",
+      "13/13 [==============================] - 1s - loss: 1.0524 - acc: 0.7885 - val_loss: 1.2060 - val_acc: 0.7500\n",
+      "Epoch 21/25\n",
+      "13/13 [==============================] - 1s - loss: 1.0385 - acc: 0.8269 - val_loss: 1.1762 - val_acc: 0.7500\n",
+      "Epoch 22/25\n",
+      "13/13 [==============================] - 1s - loss: 1.0132 - acc: 0.8269 - val_loss: 1.1538 - val_acc: 0.7500\n",
+      "Epoch 23/25\n",
+      "13/13 [==============================] - 2s - loss: 0.9985 - acc: 0.8077 - val_loss: 1.1351 - val_acc: 0.7500\n",
+      "Epoch 24/25\n",
+      "13/13 [==============================] - 3s - loss: 0.9799 - acc: 0.7692 - val_loss: 1.1188 - val_acc: 0.7500\n",
+      "Epoch 25/25\n",
+      "13/13 [==============================] - 5s - loss: 0.9579 - acc: 0.7885 - val_loss: 1.1044 - val_acc: 0.7500\n"
+     ]
+    },
+    {
+     "data": {
+      "text/plain": [
+       "<keras.callbacks.History at 0x8b2d0da0>"
+      ]
+     },
+     "execution_count": 11,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "model.fit(Xtrain, ytrain, validation_data=(Xvalid, yvalid), nb_epoch=25, batch_size=32)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "collapsed": true
+   },
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 2",
+   "language": "python",
+   "name": "python2"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 2
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython2",
+   "version": "2.7.10"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 0
+}
