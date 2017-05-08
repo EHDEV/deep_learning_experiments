@@ -31,9 +31,9 @@ embed_matrix = tf.Variable(tf.random_uniform([VOCAB_SIZE, EMBED_SIZE], -1.0, 1.0
 ```python
 embed = tf.nn.embedding_lookup(embed_matrix, center_words)
 # [0 1 0 0]   x   [12 4 13
-                   33 4 66
-                  * 6 5 55 *
-                   15 54 53]
+#                * 33 4 66 *
+#                  6 5 55 
+#                 15 54 53]
 ```
 
 #### 4. Define loss function
@@ -68,7 +68,6 @@ loss = tf.reduce_mean(tf.nn.nce_loss(weights=nce_weight,
 ```python
 optimizer = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(loss)
 ```
-
 
 ## Phase 2: execute the computation
 
