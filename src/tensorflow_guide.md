@@ -43,9 +43,9 @@ embed = tf.nn.embedding_lookup(embed_matrix, center_words)
 
 ```python
 # nce_loss definition
-  tf.nn.nce_loss(weights, biases, labels, inputs, num_sampled, num_classes, num_true=1,
-  sampled_values=None, remove_accidental_hits=False, partition_strategy='mod',
-  name='nce_loss')
+tf.nn.nce_loss(weights, biases, labels, inputs, num_sampled, num_classes, num_true=1,
+sampled_values=None, remove_accidental_hits=False, partition_strategy='mod',
+name='nce_loss')
 
 # Defining weights and biases
 nce_weight = tf.Variable(tf.truncated_normal([VOCAB_SIZE, EMBED_SIZE], stddev=1.0 / EMBED_SIZE ** 0.5))
@@ -84,8 +84,8 @@ with tf.Session() as sess:
  for index in xrange(NUM_TRAIN_STEPS):
      # 2. Feed in the training data. Might involve randomizing the order of data samples.
      batch = batch_gen.next()
-     # 3. Execute the inference model on the training data, so it calculates for each training input
-example the output with the current model parameters.
+     # 3. Execute the inference model on the training data, 
+     # so it calculates for each training input example the output with the current model parameters.
      # 4. Compute the cost
      loss_batch, _ = sess.run([loss, optimizer], feed_dict={center_words: batch[0], target_words: batch[1]})
      # 5. Adjust the model parameters to minimize/maximize the cost depending on the model.
