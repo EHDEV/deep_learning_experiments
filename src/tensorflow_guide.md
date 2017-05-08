@@ -43,9 +43,8 @@ embed = tf.nn.embedding_lookup(embed_matrix, center_words)
 
 ```python
 # nce_loss definition
-tf.nn.nce_loss(weights, biases, labels, inputs, num_sampled, num_classes, num_true=1,
-sampled_values=None, remove_accidental_hits=False, partition_strategy='mod',
-name='nce_loss')
+tf.nn.nce_loss(weights, biases, labels, inputs, num_sampled, num_classes, num_true=1, sampled_values=None, 
+               remove_accidental_hits=False, partition_strategy='mod', name='nce_loss')
 
 # Defining weights and biases
 nce_weight = tf.Variable(tf.truncated_normal([VOCAB_SIZE, EMBED_SIZE], stddev=1.0 / EMBED_SIZE ** 0.5))
