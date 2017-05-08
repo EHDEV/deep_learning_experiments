@@ -3,50 +3,49 @@ How to structure your TensorFlow model
 ## Phase 1: assemble your graph
 
 #### 1. Define placeholders for input and output
-Input is the center word and output is the target (context) word. Instead of using one-hot vectors, we input the index of those words directly. For example, if the center word is the 1001th word in the vocabulary, we input the number 1001.
+ - Input is the center word and output is the target (context) word. 
+ - Instead of using one-hot vectors, we input the index of those words directly. 
+      -> For example, if the center word is the 1001th word in the vocabulary, we input the number 1001.
 
-Each sample input is a scalar, the placeholder for BATCH\_SIZE sample inputs with have shape [BATCH\_SIZE]. Similar, the placeholder for BATCH\_SIZE sample outputs with have shape [BATCH_SIZE]
+ - Each sample input (and output) is a scalar, the placeholder for BATCH_SIZE sample inputs (and outputs) will have shape [BATCH_SIZE].
 
-``` 
+```python
 center_words = tf.placeholder(tf.int32, shape=[BATCH_SIZE])
 target_words = tf.placeholder(tf.int32, shape=[BATCH_SIZE])
 ```
 
 #### 2. Define the weights
 
-Each row corresponds to the representation vector of one word. If one word is represented with a vector of size EMBED_SIZE, then the embedding matrix will have shape [VOCAB_SIZE,
-EMBED_SIZE]. 
-We initialize the embedding matrix to value from a random distribution. In this
-case, let’s choose uniform distribution.
+- Each row corresponds to the representation vector of one word. 
+- If one word is represented with a vector of size EMBED_SIZE, then the embedding matrix will have shape [VOCAB_SIZE, EMBED_SIZE]. 
+- We initialize the embedding matrix to value from a random distribution (uniform, normal, etc)
 
-```
+```python
 embed_matrix = tf.Variable(tf.random_uniform([VOCAB_SIZE, EMBED_SIZE], -1.0, 1.0))
 ```
 
 #### 3. Define the inference model
 
-To get the representation of all the center words in the batch, we get the slice of all corresponding rows in the embedding matrix. TensorFlow provides a convenient method to do so called tf.nn.embedding_lookup().
+- To get the representation of all the center words in the batch, we get the slice of all corresponding rows in the embedding matrix. - - TensorFlow provides a convenient method to do so called tf.nn.embedding_lookup().
 
-```
+```python
 embed = tf.nn.embedding_lookup(embed_matrix, center_words)
 # [0 1 0 0]   x   [12 4 13
                    33 4 66
-                   *6 5 55 
+                  * 6 5 55 *
                    15 54 53]
 ```
 
 #### 4. Define loss function
 
-While NCE is cumbersome to implement in pure Python, TensorFlow already implemented it for
-us.
+- While NCE is cumbersome to implement in pure Python, TensorFlow already implemented it for us.
+- For nce_loss, we need weights and biases for the hidden layer to calculate NCE loss.
 
-For nce_loss, we need weights and biases for the hidden layer to calculate NCE loss.
-
-```
+```python
 # nce_loss definition
-tf.nn.nce_loss(weights, biases, labels, inputs, num_sampled, num_classes, num_true=1,
-sampled_values=None, remove_accidental_hits=False, partition_strategy='mod',
-name='nce_loss')
+  tf.nn.nce_loss(weights, biases, labels, inputs, num_sampled, num_classes, num_true=1,
+  sampled_values=None, remove_accidental_hits=False, partition_strategy='mod',
+  name='nce_loss')
 
 # Defining weights and biases
 nce_weight = tf.Variable(tf.truncated_normal([VOCAB_SIZE, EMBED_SIZE], stddev=1.0 / EMBED_SIZE ** 0.5))
@@ -66,12 +65,17 @@ loss = tf.reduce_mean(tf.nn.nce_loss(weights=nce_weight,
 
 #### 5. Define optimizer
 
-`optimizer = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(loss)`
+```python
+optimizer = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(loss)
+```
 
 
 ## Phase 2: execute the computation
 
-Which is basically training your model. We will create a session then within the session, use the good old feed_dict to feed inputs and outputs into the placeholders, run the optimizer to minimize the loss, and fetch the loss value to report back to us.
+- Create a session within the session
+- Use feed_dict to feed inputs and outputs into the placeholders 
+- Run the optimizer to minimize the loss
+- And fetch the loss value to report back to us.
 
 ```python
 with tf.Session() as sess:
@@ -91,10 +95,12 @@ example the output with the current model parameters.
          print('Average loss at step {}: {:5.1f}'.format(index + 1, average_loss / (index + 1)))
 ```
 
+### Group nodes/ops in TensorBoard
 
- + how can we tell TensorBoard to know which nodes should be grouped together? For example, we would like to group all ops related to input/output together, and all ops related to NCE loss together. Thankfully, TensorFlow lets us do that with name scope. You can just put all the ops that you want to group together under the block:
+- How can we tell TensorBoard to know which nodes should be grouped together? For example, we would like to group all ops related to input/output together, and all ops related to NCE loss together. 
+- Thankfully, TensorFlow lets us do that with name scope. You can just put all the ops that you want to group together under the block:
 
-```
+```python
 # Example 
 with tf.name_scope('data'):
 center_words = tf.placeholder(tf.int32, shape=[BATCH_SIZE], name='center_words')
@@ -110,14 +116,15 @@ with tf.name_scope('loss'):
  loss = tf.reduce_mean(tf.nn.nce_loss(weights=nce_weight,
  biases=nce_bias, labels=target_words, inputs=embed, num_sampled=NUM_SAMPLED, num_classes=VOCAB_SIZE), name='loss')
 
-
  ```
 
-i. Visualize the computation graph (using TensorBoard)
+### Visualize the computation graph (using TensorBoard)
 
-You’ve probably noticed that TensorBoard has two kinds of edges: the solid lines and the dottedlines. The solid lines represent data flow edges. For example, the value of op tf.add(x + y) depends on the value of x and y. The dotted arrows represent control dependence edges. For example, a variable can only be used after being initialized, as you see variable embed_matrix depends on the op init). Control dependencies can also be declared using tf.Graph.control_dependencies(control_inputs) we talked about in lecture 2.
+- Solid lines in TensorBoard represent data flow edges. For example, the value of op tf.add(x + y) depends on the value of x and y. 
+- Dotted arrows represent control dependence edges. For example, a variable can only be used after being initialized, as you see variable embed_matrix depends on the op init). 
+- Control dependencies can also be declared using tf.Graph.control_dependencies(control_inputs).
 
-```
+```python
  # Step 1: define the placeholders for input and output
 with tf.name_scope("data"):
  center_words = tf.placeholder(tf.int32, shape=[BATCH_SIZE], name='center_words')
@@ -148,7 +155,7 @@ Our class should follow the interface. We combined step 3 and 4 because we want 
 embed under the name scope of “NCE loss”.
 
 
-```
+```python
 class SkipGramModel:
  """ Build the graph for word2vec model """
  def __init__(self, params):
@@ -169,15 +176,16 @@ about """
 ```
 
  # Step 5: define optimizer
+ 
+ ```
  optimizer = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(loss)
+ ```
 
-
-
-ii. Visualize 
+### Visualize Word Embeddings in 2D
 
 Follow these steps 
 
-```
+```python
 from tensorflow.contrib.tensorboard.plugins import projector
 # obtain the embedding_matrix after you’ve trained it
 final_embed_matrix = sess.run(model.embed_matrix)
