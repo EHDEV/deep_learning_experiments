@@ -1,4 +1,4 @@
-How to structure your TensorFlow model
+# How to structure your TensorFlow model
 
 ## Phase 1: assemble your graph
 
@@ -129,19 +129,20 @@ with tf.name_scope("data"):
  target_words = tf.placeholder(tf.int32, shape=[BATCH_SIZE, 1], name='target_words')
 # Assemble this part of the graph on the CPU. You can change it to GPU if you have GPU
 with tf.device('/cpu:0'):
- with tf.name_scope("embed"):
- # Step 2: define weights. In word2vec, it's actually the weights that we care about
- embed_matrix = tf.Variable(tf.random_uniform([VOCAB_SIZE, EMBED_SIZE], -1.0, 1.0), name='embed_matrix')
- # Step 3 + 4: define the inference + the loss function
- with tf.name_scope("loss"):
- # Step 3: define the inference
- embed = tf.nn.embedding_lookup(embed_matrix, center_words, name='embed')
- # Step 4: construct variables for NCE loss
- nce_weight = tf.Variable(tf.truncated_normal([VOCAB_SIZE, EMBED_SIZE], stddev=1.0 / math.sqrt(EMBED_SIZE)), name='nce_weight')
- nce_bias = tf.Variable(tf.zeros([VOCAB_SIZE]), name='nce_bias')
- # define loss function to be NCE loss function
- loss = tf.reduce_mean(tf.nn.nce_loss(weights=nce_weight, biases=nce_bias, labels=target_words, inputs=embed, num_sampled=NUM_SAMPLED, 
-                        num_classes=VOCAB_SIZE), name='loss')
+    with tf.name_scope("embed"):
+         # Step 2: define weights. In word2vec, it's actually the weights that we care about
+         embed_matrix = tf.Variable(tf.random_uniform([VOCAB_SIZE, EMBED_SIZE], -1.0, 1.0), name='embed_matrix')
+     # Step 3 + 4: define the inference + the loss function
+     with tf.name_scope("loss"):
+         # Step 3: define the inference
+         embed = tf.nn.embedding_lookup(embed_matrix, center_words, name='embed')
+         # Step 4: construct variables for NCE loss
+         nce_weight = tf.Variable(tf.truncated_normal([VOCAB_SIZE, EMBED_SIZE], stddev=1.0 / math.sqrt(EMBED_SIZE)), name='nce_weight')
+         nce_bias = tf.Variable(tf.zeros([VOCAB_SIZE]), name='nce_bias')
+         # define loss function to be NCE loss function
+         loss = tf.reduce_mean(tf.nn.nce_loss(weights=nce_weight, biases=nce_bias, 
+                                         labels=target_words, inputs=embed, num_sampled=NUM_SAMPLED, 
+                                         num_classes=VOCAB_SIZE), name='loss')
 ```
 
 ### Make your model reusable
@@ -210,3 +211,185 @@ saver_embed.save(sess, LOGDIR + '/skip-gram.ckpt', 1)
 + Now we run our model again, then again run tensorboard. If you go to http://localhost:6006, clickon the Embeddings tab, you’ll see all the visualization.
 
 + You can visualize more than word embeddings, aka, you can visualize any embeddings.
+
+# II.  How to manage your experiments in TensorFlow
+
+- A good practice is to periodically save the model’s parameters after a certain number of steps so that we can restore/retrain our model from that step if need be. 
+- The tf.train.Saver() classallows us to do so by saving the graph’s variables in binary files.
+```python
+tf.train.Saver.save(sess, save_path, global_step=None, latest_filename=None,
+meta_graph_suffix='meta', write_meta_graph=True, write_state=True)
+```
+For example, if we want to save the variables of the graph after every 1000 training steps, we
+do the following:
+
+```python
+# define model
+# create a saver object
+saver = tf.train.Saver()
+# launch a session to compute the graph
+with tf.Session() as sess:
+ # actual training loop
+    for step in range(training_steps):
+        sess.run([optimizer])
+        if (step + 1) % 1000==0:
+            saver.save(sess, 'checkpoint_directory/model_name', global_step=model.global_step)
+```
+In TensorFlow lingo, the step at which you save your graph’s variables is called a checkpoint.
+Since we will be creating many checkpoints, it’s helpful to append the number of training steps
+our model has gone through in a variable called global_step. It’s a very common variable to see
+in TensorFlow program. We first need to create it, initialize it to 0 and set it to be not trainable,
+since we don’t want to TensorFlow to optimize it.
+
+``` python
+self.global_step = tf.Variable(0, dtype=tf.int32, trainable=False, name='global_step')
+```
+We need to pass global_step as a parameter to the optimizer so it knows to increment
+global_step by one with each training step:
+
+```python
+self.optimizer = tf.train.GradientDescentOptimizer(self.lr).minimize(self.loss, global_step=self.global_step)
+```
+To save the session’s variables in the folder ‘checkpoints’ with name model-name-global-step,
+we use this:
+```python
+saver.save(sess, 'checkpoints/skip-gram', global_step=model.global_step)
+```
+So our training loop for word2vec now looks like this:
+
+```python
+self.global_step = tf.Variable(0, dtype=tf.int32, trainable=False, name='global_step')
+self.optimizer = tf.train.GradientDescentOptimizer(self.lr).minimize(self.loss,
+global_step=self.global_step)
+saver = tf.train.Saver() # defaults to saving all variables
+with tf.Session() as sess:
+    sess.run(tf.global_variables_initializer())
+    average_loss = 0.0
+    writer = tf.summary.FileWriter('./improved_graph', sess.graph)
+    for index in xrange(num_train_steps):
+        batch = batch_gen.next()
+        loss_batch, _ = sess.run([model.loss, model.optimizer],
+                                  feed_dict={model.center_words: batch[0],
+                                             model.target_words: batch[1]})
+        average_loss += loss_batch
+        if (index + 1) % 1000 == 0:
+            saver.save(sess, 'checkpoints/skip-gram', global_step=model.global_step)
+```
+To restore the variables, we use tf.train.Saver.restore(sess, save_path). For example, you want
+to restore the checkpoint at 10,000th step
+
+```python
+saver.restore(sess, 'checkpoints/skip-gram-10000')
+```
+
+
+```python
+ckpt = tf.train.get_checkpoint_state(os.path.dirname('checkpoints/checkpoint'))
+if ckpt and ckpt.model_checkpoint_path:
+ saver.restore(sess, ckpt.model_checkpoint_path)
+```
+
+If there is a checkpoint, restore it. If there isn’t, train from the start.
+TensorFlow allows you to get checkpoint from a directory with
+tf.train.get_checkpoint_state(‘directory-name’). The code for checking looks something like this:
+
+The file checkpoint automatically updates the path to the latest checkpoint.
+
+```python
+ckpt = tf.train.get_checkpoint_state(os.path.dirname('checkpoints/checkpoint'))
+if ckpt and ckpt.model_checkpoint_path:
+ saver.restore(sess, ckpt.model_checkpoint_path)
+```
+
+By default, saver.save() stores all variables of the graph, and this is recommended. However,
+you can also choose what variables to store by passing them in as a list or a dict when we
+create the saver object.
+
+```python
+v1 = tf.Variable(..., name='v1')
+v2 = tf.Variable(..., name='v2')
+# pass the variables as a dict:
+saver = tf.train.Saver({'v1': v1, 'v2': v2})
+# pass them as a list
+saver = tf.train.Saver([v1, v2])
+# passing a list is equivalent to passing a dict with the variable op names # as keys
+saver = tf.train.Saver({v.op.name: v for v in [v1, v2]})
+```
+Note that savers only save variables, not the entire graph, so we still have to create the graph
+ourselves, and then load in variables. The checkpoints specify the way to map from variable
+names to tensors.
+What people usually is not just save the parameters from the last iteration, but also save the
+parameters that give the best result so far so that you can evaluate your model on the best
+parameters so far.
+
+___
+
+TensorBoard provides us with a great set of tools to visualize our summary statistics during our training. Some popular statistics to visualize is loss, average loss, accuracy. You can visualize them as scalar plots, histograms, or even images. So we have a new namescope in our graph to hold all the summary ops
+
+```python
+def _create_summaries(self):
+    with tf.name_scope("summaries"):
+        tf.summary.scalar("loss", self.loss
+        tf.summary.scalar("accuracy", self.accuracy)
+        tf.summary.histogram("histogram loss", self.loss)
+        # because you have several summaries, we should merge them all
+        # into one op to make it easier to manage
+        self.summary_op = tf.summary.merge_all()
+loss_batch, _, summary = sess.run([model.loss, model.optimizer, model.summary_op],
+                                  feed_dict=feed_dict)
+
+Now you’ve obtained the summary, you need to write the summary to file using the same
+FileWriter object we created to visual our graph.
+
+```python
+writer.add_summary(summary, global_step=step)
+```
+Now, if you go run tensorboard and go to http://localhost:6006/, in the Scalars page, you will see
+the plot of your scalar summaries. This is the summary of your loss in scalar plot.
+
+If you save your summaries into different sub-folder in your graph folder, you can compare your progresses. For example, the first time we run our model with learning rate 1.0, we save it in ‘improved_graph/lr1.0’ and the second time we run our model, we save it in ‘improved_graph/lr0.5’, on the left corner of the Scalars page, we can toggle the plots of these two runs to compare them. This can be really helpful when you want to compare the progress made with different optimizers or different parameters
+
+You can write a Python script to automate the naming of folders where you store the
+graphs/plots of each experiment.
+You can visualize the statistics as images using tf.summary.image.
+
+```python
+tf.summary.image(name, tensor, max_outputs=3, collections=None)
+```
+
+## Control Randomization
+
+...
+
+
+## Reading Data in TensorFlow
+
+There are two main ways to load data into a TensorFlow graph: 
+     + through feed_dict
+     + through readers that allow us to read tensors directly from file.
+
+##### feed_dict
+
+Feed_dict will first send data from the storage system to the client, and then
+from client to the worker process. This will cause the data to slow down, especially if the client is
+on a different machine from the worker process. TensorFlow has readers that allow us to load
+data directly into the worker process.
+
+```python
+tf.TextLineReader
+Outputs the lines of a file delimited by newlines
+E.g. text files, CSV files
+tf.FixedLengthRecordReader
+Outputs the entire file when all files have same fixed lengths
+E.g. each MNIST file has 28 x 28 pixels, CIFAR-10 32 x 32 x 3
+tf.WholeFileReader
+Outputs the entire file content
+tf.TFRecordReader
+Reads samples from TensorFlow's own binary format (TFRecord)
+tf.ReaderBase
+Allows you to create your own readers
+```
+Data can be read in as individual data examples or in batches of examples.
+
+
+
