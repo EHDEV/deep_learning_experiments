@@ -430,7 +430,7 @@ tf.get_variable(<name>, <shape>, <initializer>)
 - To declare a variable scope, you do it the same way you do name scope:
 
 For example:
-```
+```python
 with tf.variable_scope('conv1') as scope:
  w = tf.get_variable('weights', [5, 5, 1, 32])
  b = tf.get_variable('biases', [32], initializer=tf.random_normal_initializer())
