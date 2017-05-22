@@ -1,3 +1,6 @@
+##### Some notes from Stanford's *CS 20SI: Tensorflow for Deep Learning Research* class
+
+
 # How to structure your TensorFlow model
 
 ## Phase 1: assemble your graph
