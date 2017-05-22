@@ -394,5 +394,52 @@ Allows you to create your own readers
 ```
 Data can be read in as individual data examples or in batches of examples.
 
+# III. Convolutions in Tensorflow
 
+Convolution,in a deep learning context, is how the original input (in the first convolutional layer, it’s part of the original image) is modifiedby the kernel (or filter). 
+
+Tensorflow has tf.nn.conv2d for handling two dimensional images
+```python
+tf.nn.conv2d(input, filter, strides, padding, use_cudnn_on_gpu=None, data_format=None,name=None)
+```
+```Input: Batch size x Height x Width x Channels
+Filter: Height x Width x Input Channels x Output Channels
+_(e.g. [5, 5, 3, 64])_
+Strides: 4 element 1-D tensor, strides in each direction (often [1, 1, 1, 1] or [1, 2, 2, 1])
+Padding: 'SAME' or 'VALID'
+Data_format: default to NHWC
+```
+- Generally, for strides, you don’t want to use any number other than 1 in the first and the fourthdimension,
+- Because of this property of convolution, we can do convolutions without training anything; We can simply choose a kernel and see how that kernel affects our image.
+
+### Variable scope
+
+- Since we’ll be dealing with multiple layers, it’s important to introduce variable scope. Think of a variable scope something similar to a namespace. A variable name ‘weights’ in variable scope ‘conv1’ will become ‘conv1-weights’. 
+- The common practice is to create a variable scope for each layer, so that if you have variable ‘weights’ in both convolution layer 1 and convolution layer 2,there won’t be any name clash. 
+- In variable scope, we don’t create variable using tf.Variable, but instead use tf.get_variable()
+
+```python 
+tf.get_variable(<name>, <shape>, <initializer>)
+```
+
+- If a variable with that name already exists in that variable scope, we use that variable. If a variable with that name doesn’t already exist in that variable scope, then TensorFlow creates a new variable. 
+- This setup makes it really easy to share variables across architecture
+- Variable scopes help you initialize all of them in one place.
+
+- Nodes in the same variable scope will be grouped together, and therefore you don’t have to use name scope any more. 
+- To declare a variable scope, you do it the same way you do name scope:
+
+For example:
+```
+with tf.variable_scope('conv1') as scope:
+ w = tf.get_variable('weights', [5, 5, 1, 32])
+ b = tf.get_variable('biases', [32], initializer=tf.random_normal_initializer())
+ conv = tf.nn.conv2d(images, w, strides=[1, 1, 1, 1], padding='SAME')
+ conv1 = tf.nn.relu(conv + b, name=scope.name)
+with tf.variable_scope('conv2') as scope:
+ w = tf.get_variable('weights', [5, 5, 32, 64])
+ b = tf.get_variable('biases', [64], initializer=tf.random_normal_initializer())
+ conv = tf.nn.conv2d(conv1, w, strides=[1, 1, 1, 1], padding='SAME')
+ conv2 = tf.nn.relu(conv + b, name=scope.name)
+```
 
